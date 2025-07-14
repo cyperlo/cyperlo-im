@@ -5,14 +5,19 @@ SERVER_TYPE=rpc
 
 # 测试环境配置
 # docker的镜像发布地址
-DOCKER_REPO_TEST=registry.cn-hangzhou.aliyuncs.com/hailong-bot/${SERVER_NAME}-${SERVER_TYPE}-dev
+DOCKER_REPO_DEV=registry.cn-hangzhou.aliyuncs.com/hailong-bot/${SERVER_NAME}-${SERVER_TYPE}-dev
+DOCKER_REPO_TEST=registry.cn-hangzhou.aliyuncs.com/hailong-bot/${SERVER_NAME}-${SERVER_TYPE}-test
 # 测试版本
 VERSION_TEST=$(VERSION)
 # 编译的程序名称
-APP_NAME_TEST=cyperlo-im-${SERVER_NAME}-${SERVER_TYPE}-dev
+APP_NAME_DEV=cyperlo-im-${SERVER_NAME}-${SERVER_TYPE}-dev
+APP_NAME_TEST=cyperlo-im-${SERVER_NAME}-${SERVER_TYPE}-test
 
 # 测试下的编译文件
-DOCKER_FILE_TEST=./deploy/dockerfile/Dockerfile_${SERVER_NAME}_${SERVER_TYPE}_dev
+# 开发环境
+DOCKER_FILE_DEV=./deploy/dockerfile/Dockerfile_${SERVER_NAME}_${SERVER_TYPE}_dev
+# 测试环境
+DOCKER_FILE_TEST=./deploy/dockerfile/Dockerfile_${SERVER_NAME}_${SERVER_TYPE}_test
 
 # 测试环境的编译发布
 build-test:
