@@ -43,6 +43,7 @@ const messageSlice = createSlice({
         otherUsername = from_username || from;
       }
       
+      // 确保会话存在
       if (!state.conversations[otherUsername]) {
         state.conversations[otherUsername] = {
           userId: from === currentUserId ? to! : from,
@@ -51,10 +52,25 @@ const messageSlice = createSlice({
         };
       }
       
-      state.conversations[otherUsername].messages.push(action.payload);
+      // 检查消息是否已存在（避免重复）
+      const exists = state.conversations[otherUsername].messages.some(
+        msg => msg.timestamp === action.payload.timestamp && msg.content === action.payload.content
+      );
+      
+      if (!exists) {
+        state.conversations[otherUsername].messages.push(action.payload);
+      }
     },
     setActiveConversation: (state, action: PayloadAction<string | null>) => {
       state.activeConversation = action.payload;
+      // 如果会话不存在，创建空会话
+      if (action.payload && !state.conversations[action.payload]) {
+        state.conversations[action.payload] = {
+          userId: '',
+          username: action.payload,
+          messages: [],
+        };
+      }
     },
     clearMessages: (state) => {
       state.conversations = {};

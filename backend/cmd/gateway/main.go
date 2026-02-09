@@ -18,6 +18,7 @@ func main() {
 	r := gin.Default()
 
 	r.Use(func(c *gin.Context) {
+		log.Printf("[%s] %s %s", c.Request.Method, c.Request.URL.Path, c.ClientIP())
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -37,14 +38,32 @@ func main() {
 		protected := api.Group("")
 		protected.Use(gateway.AuthMiddleware())
 		{
-			protected.POST("/messages", gateway.SendMessage)
-			protected.POST("/friends", friend.AddFriend)
-			protected.GET("/friends", friend.GetFriends)
-			protected.GET("/users/search", friend.SearchUser)
-			protected.GET("/conversations", message.GetHistory)
+			protected.POST("/messages", func(c *gin.Context) {
+				log.Printf("SendMessage called")
+				gateway.SendMessage(c)
+			})
+			protected.POST("/friends", func(c *gin.Context) {
+				log.Printf("AddFriend called")
+				friend.AddFriend(c)
+			})
+			protected.GET("/friends", func(c *gin.Context) {
+				log.Printf("GetFriends called")
+				friend.GetFriends(c)
+			})
+			protected.GET("/users/search", func(c *gin.Context) {
+				log.Printf("SearchUser called with username: %s", c.Query("username"))
+				friend.SearchUser(c)
+			})
+			protected.GET("/conversations", func(c *gin.Context) {
+				log.Printf("GetHistory called")
+				message.GetHistory(c)
+			})
 		}
 	}
 
 	log.Println("IM Gateway starting on :8080")
-	r.Run(":8080")
+	log.Println("Listening on all interfaces (0.0.0.0:8080)")
+	if err := r.Run("0.0.0.0:8080"); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

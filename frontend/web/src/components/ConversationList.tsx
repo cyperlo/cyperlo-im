@@ -54,7 +54,13 @@ const ConversationList: React.FC = () => {
       setIsModalOpen(false);
       setSearchResult(null);
       loadFriends();
-      // 自动开始会话
+      // 自动开始会话并创建空会话
+      const newConversation = {
+        userId: searchResult.id,
+        username: searchResult.username,
+        messages: [],
+      };
+      // 手动添加到 Redux store
       dispatch(setActiveConversation(searchResult.username));
       setActiveTab('conversations');
     } catch (error: any) {

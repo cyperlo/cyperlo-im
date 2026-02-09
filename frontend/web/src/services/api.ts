@@ -1,7 +1,31 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8081/api/v1';
-const GATEWAY_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = 'http://192.168.10.182:8081/api/v1';
+const GATEWAY_URL = 'http://192.168.10.182:8080/api/v1';
+
+// 添加请求拦截器
+axios.interceptors.request.use(
+  (config) => {
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params || config.data);
+    return config;
+  },
+  (error) => {
+    console.error('[API Request Error]', error);
+    return Promise.reject(error);
+  }
+);
+
+// 添加响应拦截器
+axios.interceptors.response.use(
+  (response) => {
+    console.log(`[API Response] ${response.config.url}`, response.data);
+    return response;
+  },
+  (error) => {
+    console.error('[API Response Error]', error.response?.status, error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
 
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
@@ -62,6 +86,17 @@ export const conversationAPI = {
     const response = await axios.get(`${GATEWAY_URL}/conversations`, {
       headers: getAuthHeader(),
     });
+    return response.data;
+  },
+};
+
+export const messageAPI = {
+  send: async (to: string, content: string) => {
+    const response = await axios.post(
+      `${GATEWAY_URL}/messages`,
+      { to, content, type: 'text' },
+      { headers: getAuthHeader() }
+    );
     return response.data;
   },
 };

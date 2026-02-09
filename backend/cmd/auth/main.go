@@ -28,13 +28,22 @@ func main() {
 
 	api := r.Group("/api/v1/auth")
 	{
-		api.POST("/register", auth.Register)
-		api.POST("/login", auth.Login)
+		api.POST("/register", func(c *gin.Context) {
+			log.Printf("Register request from: %s", c.ClientIP())
+			auth.Register(c)
+		})
+		api.POST("/login", func(c *gin.Context) {
+			log.Printf("Login request from: %s", c.ClientIP())
+			auth.Login(c)
+		})
 		api.POST("/token/refresh", auth.RefreshToken)
 		api.GET("/oauth2/authorize", auth.Authorize)
 		api.POST("/oauth2/token", auth.Token)
 	}
 
 	log.Println("Auth Service starting on :8081")
-	r.Run(":8081")
+	log.Println("Listening on all interfaces (0.0.0.0:8081)")
+	if err := r.Run("0.0.0.0:8081"); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

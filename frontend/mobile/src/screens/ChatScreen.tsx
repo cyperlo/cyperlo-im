@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import wsService from '../services/websocket';
+import { messageAPI } from '../services/api';
 
 export default function ChatScreen({ route, navigation }: any) {
   const { username } = route.params;
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const { conversations } = useSelector((state: RootState) => state.message);
-  const { userId } = useSelector((state: RootState) => state.auth);
+  const { userId, token } = useSelector((state: RootState) => state.auth);
 
   const messages = conversations[username]?.messages || [];
 
@@ -23,14 +25,30 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (input.trim()) {
-      wsService.send({
-        type: 'chat',
-        to: username,
-        content: input,
-      });
+  const handleSend = async () => {
+    if (input.trim() && !sending) {
+      const content = input.trim();
       setInput('');
+      setSending(true);
+
+      try {
+        // 优先使用 WebSocket
+        if (wsService.isConnected()) {
+          wsService.send({
+            type: 'chat',
+            to: username,
+            content,
+          });
+        } else {
+          // WebSocket 未连接，使用 HTTP API
+          await messageAPI.send(username, content, token);
+        }
+      } catch (error) {
+        Alert.alert('发送失败', '消息发送失败，请重试');
+        setInput(content);
+      } finally {
+        setSending(false);
+      }
     }
   };
 
@@ -42,8 +60,8 @@ export default function ChatScreen({ route, navigation }: any) {
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={90}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -110,11 +128,11 @@ export default function ChatScreen({ route, navigation }: any) {
           multiline
         />
         <TouchableOpacity 
-          style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]} 
+          style={[styles.sendButton, (!input.trim() || sending) && styles.sendButtonDisabled]} 
           onPress={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || sending}
         >
-          <Text style={styles.sendButtonText}>发送</Text>
+          <Text style={styles.sendButtonText}>{sending ? '发送中...' : '发送'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -125,6 +143,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    ...Platform.select({
+      android: {
+        paddingBottom: 0,
+      },
+    }),
   },
   header: {
     flexDirection: 'row',
@@ -167,6 +190,11 @@ const styles = StyleSheet.create({
   },
   messageList: {
     padding: 15,
+    ...Platform.select({
+      android: {
+        paddingBottom: 80,
+      },
+    }),
   },
   messageRow: {
     flexDirection: 'row',
@@ -221,6 +249,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#e8e8e8',
+    ...Platform.select({
+      android: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+      },
+    }),
   },
   input: {
     flex: 1,

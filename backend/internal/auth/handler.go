@@ -26,13 +26,20 @@ type LoginRequest struct {
 func Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误: " + err.Error()})
 		return
 	}
 
+	// 检查用户名是否已存在
 	var existingUser models.User
 	if err := database.DB.Where("username = ?", req.Username).First(&existingUser).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "用户名已存在"})
+		return
+	}
+
+	// 检查邮箱是否已存在
+	if err := database.DB.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "邮箱已被使用"})
 		return
 	}
 
@@ -53,7 +60,7 @@ func Register(c *gin.Context) {
 	}
 
 	if err := database.DB.Create(user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败: " + err.Error()})
 		return
 	}
 
@@ -61,6 +68,7 @@ func Register(c *gin.Context) {
 		"user_id":  user.ID,
 		"username": user.Username,
 		"email":    user.Email,
+		"message":  "注册成功",
 	})
 }
 

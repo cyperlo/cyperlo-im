@@ -83,15 +83,36 @@ func SearchUser(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
+	var users []models.User
+	// 模糊搜索：支持部分匹配
+	if err := database.DB.Where("username LIKE ?", "%"+username+"%").Limit(10).Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "搜索失败"})
+		return
+	}
+
+	if len(users) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"email":    user.Email,
-	})
+	// 如果只有一个结果，返回单个用户（保持向后兼容）
+	if len(users) == 1 {
+		c.JSON(http.StatusOK, gin.H{
+			"id":       users[0].ID,
+			"username": users[0].Username,
+			"email":    users[0].Email,
+		})
+		return
+	}
+
+	// 多个结果，返回列表
+	var result []gin.H
+	for _, user := range users {
+		result = append(result, gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"users": result})
 }

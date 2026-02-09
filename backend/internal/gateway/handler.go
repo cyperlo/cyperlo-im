@@ -1,9 +1,12 @@
 package gateway
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
+	"github.com/cyperlo/im/internal/auth"
 	"github.com/cyperlo/im/pkg/jwt"
 	"github.com/gin-gonic/gin"
 )
@@ -45,9 +48,37 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
+		return
+	}
+
+	// 保存消息到数据库
+	if err := saveMessageToDB(userID.(string), req.To, req.Content); err != nil {
+		log.Printf("Failed to save message: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存消息失败"})
+		return
+	}
+
+	// 构造消息
+	sender := auth.GetUserByID(userID.(string))
+	msg := WSMessage{
+		Type:         "chat",
+		To:           req.To,
+		From:         userID.(string),
+		FromUsername: sender.Username,
+		Content:      req.Content,
+		Timestamp:    time.Now().Unix(),
+	}
+
+	// 通过 WebSocket 广播
+	data, _ := json.Marshal(msg)
+	hub.Broadcast <- data
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "sent",
-		"timestamp": time.Now().Unix(),
+		"timestamp": msg.Timestamp,
 	})
 }
 

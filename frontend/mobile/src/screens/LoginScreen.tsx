@@ -69,6 +69,13 @@ export default function LoginScreen({ navigation }: any) {
             {isLogin ? '没有账号？注册' : '已有账号？登录'}
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Text style={styles.settingsText}>⚙️ 服务器设置</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -128,6 +135,15 @@ const styles = StyleSheet.create({
     color: '#0088cc',
     textAlign: 'center',
     marginTop: 20,
+    fontSize: 14,
+  },
+  settingsButton: {
+    marginTop: 15,
+    padding: 10,
+    alignItems: 'center',
+  },
+  settingsText: {
+    color: '#666',
     fontSize: 14,
   },
 });

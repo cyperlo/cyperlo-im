@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Input, Button, List, Avatar, Empty, Tooltip } from 'antd';
+import { Input, Button, List, Avatar, Empty, Tooltip, message as antMessage } from 'antd';
 import { SendOutlined, SmileOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { setActiveConversation } from '../store/slices/messageSlice';
 import wsService from '../services/websocket';
+import { messageAPI } from '../services/api';
 
 const ChatWindow: React.FC = () => {
   const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { activeConversation, conversations } = useSelector((state: RootState) => state.message);
@@ -28,14 +30,28 @@ const ChatWindow: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
-    if (input.trim() && activeConversation) {
-      wsService.send({
-        type: 'chat',
-        to: activeConversation,
-        content: input,
-      });
+  const handleSend = async () => {
+    if (input.trim() && activeConversation && !sending) {
+      const content = input.trim();
       setInput('');
+      setSending(true);
+
+      try {
+        if (wsService.isConnected()) {
+          wsService.send({
+            type: 'chat',
+            to: activeConversation,
+            content,
+          });
+        } else {
+          await messageAPI.send(activeConversation, content);
+        }
+      } catch (error) {
+        antMessage.error('发送失败，请重试');
+        setInput(content);
+      } finally {
+        setSending(false);
+      }
     }
   };
 
@@ -252,9 +268,10 @@ const ChatWindow: React.FC = () => {
             type="primary" 
             icon={<SendOutlined />} 
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
+            loading={sending}
             style={{
-              background: input.trim() ? '#0088cc' : '#e8e8e8',
+              background: (input.trim() && !sending) ? '#0088cc' : '#e8e8e8',
               border: 'none',
               borderRadius: '22px',
               height: isMobile ? '40px' : '44px',
@@ -264,7 +281,7 @@ const ChatWindow: React.FC = () => {
               fontSize: isMobile ? '14px' : '15px'
             }}
           >
-            {!isMobile && '发送'}
+            {!isMobile && (sending ? '发送中...' : '发送')}
           </Button>
         </div>
       </div>
