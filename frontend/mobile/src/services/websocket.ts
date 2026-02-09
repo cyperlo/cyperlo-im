@@ -1,8 +1,8 @@
 import { store } from '../store/store';
 import { addMessage } from '../store/slices/messageSlice';
+import Constants from 'expo-constants';
 
-// 修改为你的电脑局域网 IP
-const WS_URL = 'ws://192.168.10.182:8080/ws';
+const WS_URL = Constants.expoConfig?.extra?.wsUrl || 'ws://192.168.10.182:8080/ws';
 
 class WebSocketService {
   private ws: WebSocket | null = null;

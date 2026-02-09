@@ -1,6 +1,10 @@
-// 修改为你的电脑局域网 IP
-const GATEWAY_URL = 'http://192.168.10.182:8080/api/v1';
-const AUTH_URL = 'http://192.168.10.182:8081/api/v1/auth';
+import Constants from 'expo-constants';
+
+const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://192.168.10.182:8080/api/v1';
+const AUTH_BASE = Constants.expoConfig?.extra?.authUrl || 'http://192.168.10.182:8081/api/v1';
+
+const GATEWAY_URL = API_URL;
+const AUTH_URL = `${AUTH_BASE}/auth`;
 
 const request = async (baseUrl: string, url: string, options: any = {}) => {
   try {
