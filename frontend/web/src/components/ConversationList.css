@@ -1,0 +1,13 @@
+.ant-input {
+  display: flex;
+  align-items: center;
+}
+
+.ant-input-affix-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.ant-input-affix-wrapper > input.ant-input {
+  height: 100%;
+}

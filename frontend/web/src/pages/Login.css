@@ -1,0 +1,110 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: #0088cc;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-container::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(255, 255, 255, 0.06) 0%, transparent 50%);
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(-50px, -50px) rotate(180deg);
+  }
+}
+
+.login-card {
+  width: 420px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #0088cc;
+  margin: 0 0 8px 0;
+}
+
+.login-header p {
+  color: #8e8e93;
+  margin: 0;
+  font-size: 14px;
+}
+
+.ant-tabs-nav {
+  margin-bottom: 24px !important;
+}
+
+.ant-tabs-tab {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #0088cc !important;
+}
+
+.ant-tabs-ink-bar {
+  background: #0088cc !important;
+}
+
+.ant-btn-primary {
+  background: #0088cc;
+  border-color: #0088cc;
+  height: 44px;
+  font-size: 16px;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+.ant-btn-primary:hover {
+  background: #006ba1;
+  border-color: #006ba1;
+}
+
+.ant-input-affix-wrapper,
+.ant-input {
+  border-radius: 8px;
+  height: 44px;
+}
+
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: #0088cc;
+  box-shadow: 0 0 0 2px rgba(0, 136, 204, 0.1);
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #0088cc;
+  border-color: #0088cc;
+}
+
+.ant-checkbox-wrapper:hover .ant-checkbox-inner {
+  border-color: #0088cc;
+}

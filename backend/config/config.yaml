@@ -1,0 +1,21 @@
+server:
+  gateway_port: 8080
+  auth_port: 8081
+  message_port: 8082
+
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: password
+  dbname: im_db
+
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: your-secret-key
+  expire_hours: 24

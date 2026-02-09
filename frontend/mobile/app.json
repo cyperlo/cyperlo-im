@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Cyperlo IM",
+    "slug": "cyperlo-im",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0088cc"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.cyperloim"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0088cc"
+      },
+      "package": "com.anonymous.cyperloim"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c4e3d6ad-bab7-40d5-bc89-8083d18d241e"
+      }
+    }
+  }
+}
