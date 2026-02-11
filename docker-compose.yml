@@ -24,7 +24,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - JWT_SECRET=${JWT_SECRET}
     ports:
-      - "8081:8081"
+      - "8091:8081"
     depends_on:
       - redis
     networks:
@@ -47,7 +47,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth:8081}
     ports:
-      - "8080:8080"
+      - "8090:8080"
     depends_on:
       - redis
       - auth
@@ -81,7 +81,7 @@ services:
     image: im-web:latest
     container_name: im-web
     ports:
-      - "80:80"
+      - "8088:80"
     depends_on:
       - gateway
     networks:
