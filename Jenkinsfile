@@ -46,11 +46,13 @@ pipeline {
                     string(credentialsId: 'DB_NAME', variable: 'DB_NAME'),
                     string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET')
                 ]) {
-                    sh '''
-                        cp .env.example .env
-                        docker-compose up -d
-                        docker image prune -af --filter "until=24h"
-                    '''
+                    sh 'cp .env.example .env'
+                    dockerCompose(
+                        composeFile: 'docker-compose.yml',
+                        operation: 'up',
+                        detached: true
+                    )
+                    sh 'docker image prune -af --filter "until=24h"'
                 }
             }
         }
