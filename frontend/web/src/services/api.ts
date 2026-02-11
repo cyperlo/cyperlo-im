@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8081/api/v1';
-const GATEWAY_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = 'http://192.168.10.152:8081/api/v1';
+const GATEWAY_URL = 'http://192.168.10.152:8080/api/v1';
 
 // 添加请求拦截器
 axios.interceptors.request.use(
@@ -79,11 +79,18 @@ export const friendAPI = {
     });
     return response.data;
   },
+
+  deleteFriend: async (friendId: string) => {
+    const response = await axios.delete(`${GATEWAY_URL}/friends/${friendId}`, {
+      headers: getAuthHeader(),
+    });
+    return response.data;
+  },
 };
 
 export const conversationAPI = {
-  getHistory: async () => {
-    const response = await axios.get(`${GATEWAY_URL}/conversations`, {
+  getFriendConversations: async () => {
+    const response = await axios.get(`${GATEWAY_URL}/friends/conversations`, {
       headers: getAuthHeader(),
     });
     return response.data;
@@ -105,6 +112,20 @@ export const groupAPI = {
     });
     return response.data;
   },
+  leaveGroup: async (groupId: string) => {
+    const response = await axios.delete(`${GATEWAY_URL}/groups/${groupId}/leave`, {
+      headers: getAuthHeader(),
+    });
+    return response.data;
+  },
+  updateGroupName: async (groupId: string, name: string) => {
+    const response = await axios.put(
+      `${GATEWAY_URL}/groups/${groupId}/name`,
+      { name },
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  },
 };
 
 export const messageAPI = {
@@ -122,6 +143,12 @@ export const messageAPI = {
       { content },
       { headers: getAuthHeader() }
     );
+    return response.data;
+  },
+  recall: async (messageId: string) => {
+    const response = await axios.delete(`${GATEWAY_URL}/messages/${messageId}`, {
+      headers: getAuthHeader(),
+    });
     return response.data;
   },
 };

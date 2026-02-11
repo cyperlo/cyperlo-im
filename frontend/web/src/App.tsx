@@ -6,7 +6,7 @@ import ConversationList from './components/ConversationList';
 import ChatWindow from './components/ChatWindow';
 import Login from './pages/Login';
 import wsService from './services/websocket';
-import { conversationAPI } from './services/api';
+import { conversationAPI, groupAPI } from './services/api';
 import { loadConversations } from './store/slices/messageSlice';
 import './App.css';
 
@@ -14,7 +14,7 @@ const { Sider, Content } = Layout;
 
 const App: React.FC = () => {
   const { isAuthenticated, token } = useSelector((state: RootState) => state.auth);
-  const { activeConversation } = useSelector((state: RootState) => state.message);
+  const { activeConversation, loaded } = useSelector((state: RootState) => state.message);
   const dispatch = useDispatch();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -30,10 +30,16 @@ const App: React.FC = () => {
     if (isAuthenticated && token) {
       wsService.connect(token);
       
-      conversationAPI.getHistory().then((data) => {
-        if (data.conversations) {
-          dispatch(loadConversations(data.conversations));
-        }
+      // 加载好友会话和群组
+      Promise.all([
+        conversationAPI.getFriendConversations(),
+        groupAPI.getGroups()
+      ]).then(([friendData, groupData]) => {
+        const allConversations = [
+          ...(friendData.conversations || []),
+          ...(groupData.groups || [])
+        ];
+        dispatch(loadConversations(allConversations));
       }).catch((error) => {
         console.error('Failed to load conversations:', error);
       });

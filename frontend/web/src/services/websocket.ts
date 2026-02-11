@@ -1,5 +1,5 @@
 import { store } from '../store/store';
-import { addMessage } from '../store/slices/messageSlice';
+import { addMessage, updateMessage } from '../store/slices/messageSlice';
 
 class WebSocketService {
   private ws: WebSocket | null = null;
@@ -30,7 +30,30 @@ class WebSocketService {
         console.log('Received:', message);
         
         if (message.type === 'chat') {
+          console.log('Dispatching chat message');
           store.dispatch(addMessage(message));
+        } else if (message.type === 'group_message') {
+          console.log('Dispatching group message');
+          const groupMsg = {
+            type: 'chat',
+            from: message.from,
+            from_username: message.from_username,
+            to: message.group_name,
+            content: message.content,
+            timestamp: message.timestamp
+          };
+          console.log('Group message payload:', groupMsg);
+          store.dispatch(addMessage(groupMsg));
+          console.log('State after dispatch:', store.getState().message.conversations);
+        } else if (message.type === 'message_recalled') {
+          store.dispatch(updateMessage({
+            conversationName: message.conversation_name || message.group_name,
+            messageId: message.message_id,
+            content: '[消息已撤回]'
+          }));
+        } else if (message.type === 'group_created') {
+          console.log('Group created, reloading...');
+          window.location.reload();
         }
       } catch (error) {
         console.error('Failed to parse message:', error);

@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/cyperlo/im/internal/auth"
 	"github.com/cyperlo/im/internal/message"
+	"github.com/cyperlo/im/internal/models"
+	"github.com/cyperlo/im/pkg/database"
 	"github.com/cyperlo/im/pkg/jwt"
+	wsPkg "github.com/cyperlo/im/pkg/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -20,28 +23,6 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type Client struct {
-	ID     string
-	UserID string
-	Conn   *websocket.Conn
-	Send   chan []byte
-}
-
-type Hub struct {
-	Clients    map[string]*Client
-	Broadcast  chan []byte
-	Register   chan *Client
-	Unregister chan *Client
-	mu         sync.RWMutex
-}
-
-var hub = &Hub{
-	Clients:    make(map[string]*Client),
-	Broadcast:  make(chan []byte),
-	Register:   make(chan *Client),
-	Unregister: make(chan *Client),
-}
-
 type WSMessage struct {
 	Type         string `json:"type"`
 	To           string `json:"to,omitempty"`
@@ -49,70 +30,15 @@ type WSMessage struct {
 	FromUsername string `json:"from_username,omitempty"`
 	Content      string `json:"content,omitempty"`
 	Timestamp    int64  `json:"timestamp,omitempty"`
+	MessageID    string `json:"message_id,omitempty"`
+}
+
+var hub = &wsPkg.Hub{
+	Clients: make(map[string]*wsPkg.Client),
 }
 
 func init() {
-	go hub.Run()
-}
-
-func (h *Hub) Run() {
-	for {
-		select {
-		case client := <-h.Register:
-			h.mu.Lock()
-			h.Clients[client.UserID] = client
-			h.mu.Unlock()
-			log.Printf("Client registered: %s", client.UserID)
-
-		case client := <-h.Unregister:
-			h.mu.Lock()
-			if _, ok := h.Clients[client.UserID]; ok {
-				delete(h.Clients, client.UserID)
-				close(client.Send)
-			}
-			h.mu.Unlock()
-			log.Printf("Client unregistered: %s", client.UserID)
-
-		case message := <-h.Broadcast:
-			var msg WSMessage
-			if err := json.Unmarshal(message, &msg); err != nil {
-				log.Printf("Invalid message format: %v", err)
-				continue
-			}
-
-			h.mu.RLock()
-			// 根据 username 查找 userId
-			var toUserID string
-			if msg.To != "" {
-				toUser := auth.GetUserByUsername(msg.To)
-				if toUser != nil {
-					toUserID = toUser.ID
-				}
-			}
-
-			// 发送给接收者
-			if toUserID != "" {
-				if client, ok := h.Clients[toUserID]; ok {
-					select {
-					case client.Send <- message:
-					default:
-						close(client.Send)
-						delete(h.Clients, client.UserID)
-					}
-				}
-			}
-			// 发送给发送者（回显）
-			if msg.From != "" {
-				if client, ok := h.Clients[msg.From]; ok {
-					select {
-					case client.Send <- message:
-					default:
-					}
-				}
-			}
-			h.mu.RUnlock()
-		}
-	}
+	wsPkg.GlobalHub = hub
 }
 
 func HandleWebSocket(c *gin.Context) {
@@ -134,65 +60,124 @@ func HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	client := &Client{
+	client := &wsPkg.Client{
 		ID:     claims.UserID,
 		UserID: claims.UserID,
 		Conn:   conn,
 		Send:   make(chan []byte, 256),
 	}
 
-	hub.Register <- client
+	hub.RegisterClient(claims.UserID, client)
 
 	go client.WritePump()
-	go client.ReadPump()
+	go client.ReadPump(hub, claims.UserID, func(message []byte) {
+		handleWebSocketMessage(message, claims.UserID)
+	})
 }
 
-func (c *Client) ReadPump() {
-	defer func() {
-		hub.Unregister <- c
-		c.Conn.Close()
-	}()
-
-	for {
-		_, message, err := c.Conn.ReadMessage()
-		if err != nil {
-			log.Printf("Read error: %v", err)
-			break
-		}
-
-		var msg WSMessage
-		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Printf("Invalid message: %v", err)
-			continue
-		}
-
-		msg.From = c.UserID
-		msg.Timestamp = getCurrentTimestamp()
-
-		// 获取发送者的 username
-		sender := auth.GetUserByID(c.UserID)
-		if sender != nil {
-			msg.FromUsername = sender.Username
-		}
-
-		// 保存消息到数据库
-		if err := saveMessageToDB(c.UserID, msg.To, msg.Content); err != nil {
-			log.Printf("Failed to save message: %v", err)
-		}
-
-		data, _ := json.Marshal(msg)
-		hub.Broadcast <- data
+func handleWebSocketMessage(message []byte, userID string) {
+	var msg WSMessage
+	if err := json.Unmarshal(message, &msg); err != nil {
+		log.Printf("Invalid message: %v", err)
+		return
 	}
+
+	log.Printf("Received WebSocket message: type=%s, to=%s, from=%s", msg.Type, msg.To, userID)
+
+	msg.From = userID
+	msg.Timestamp = getCurrentTimestamp()
+
+	// 获取发送者的 username
+	sender := auth.GetUserByID(userID)
+	if sender != nil {
+		msg.FromUsername = sender.Username
+	}
+
+	// 处理消息撤回
+	if msg.Type == "recall" {
+		log.Printf("Recall message via HTTP API")
+		return
+	}
+
+	// 处理群组消息
+	if msg.Type == "group_message" {
+		log.Printf("Processing group message")
+		handleGroupMessage(userID, msg.To, msg.Content)
+		return
+	}
+
+	// 保存消息到数据库
+	savedMsg, err := saveMessageToDB(userID, msg.To, msg.Content)
+	if err != nil {
+		log.Printf("Failed to save message: %v", err)
+	} else {
+		msg.MessageID = savedMsg.ID
+	}
+
+	data, _ := json.Marshal(msg)
+
+	// 根据username查找userID
+	toUser := auth.GetUserByUsername(msg.To)
+	if toUser != nil {
+		wsPkg.SendToUser(toUser.ID, data)
+	}
+	wsPkg.SendToUser(userID, data)
 }
 
-func (c *Client) WritePump() {
-	defer c.Conn.Close()
+func handleGroupMessage(senderID, groupName, content string) {
+	log.Printf("handleGroupMessage called: senderID=%s, groupName=%s, content=%s", senderID, groupName, content)
 
-	for message := range c.Send {
-		if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Printf("Write error: %v", err)
-			break
-		}
+	// 根据群组名称查找群组
+	var conversation models.Conversation
+	if err := database.DB.Where("name = ? AND type = ?", groupName, "group").First(&conversation).Error; err != nil {
+		log.Printf("Group not found: %s, error: %v", groupName, err)
+		return
+	}
+
+	log.Printf("Found group: id=%s, name=%s", conversation.ID, conversation.Name)
+
+	// 保存消息
+	msg := models.Message{
+		ID:             uuid.New().String(),
+		ConversationID: conversation.ID,
+		SenderID:       senderID,
+		SenderType:     "user",
+		ContentType:    "text",
+		Content:        content,
+		Status:         "sent",
+	}
+
+	if err := database.DB.Create(&msg).Error; err != nil {
+		log.Printf("Failed to save group message: %v", err)
+		return
+	}
+
+	log.Printf("Message saved: id=%s", msg.ID)
+
+	// 广播给群组所有成员
+	var members []models.ConversationMember
+	database.DB.Where("conversation_id = ?", conversation.ID).Find(&members)
+
+	log.Printf("Found %d members in group", len(members))
+
+	var sender models.User
+	database.DB.Where("id = ?", senderID).First(&sender)
+
+	wsMsg := map[string]interface{}{
+		"type":            "group_message",
+		"conversation_id": conversation.ID,
+		"group_name":      conversation.Name,
+		"from":            senderID,
+		"from_username":   sender.Username,
+		"content":         content,
+		"timestamp":       time.Now().Unix(),
+	}
+
+	msgBytes, _ := json.Marshal(wsMsg)
+
+	for _, member := range members {
+		log.Printf("Sending message to member: %s", member.UserID)
+		wsPkg.SendToUser(member.UserID, msgBytes)
 	}
 }
 
@@ -200,19 +185,18 @@ func getCurrentTimestamp() int64 {
 	return time.Now().Unix()
 }
 
-func saveMessageToDB(fromUserID, toUsername, content string) error {
+func saveMessageToDB(fromUserID, toUsername, content string) (*models.Message, error) {
 	// 根据 username 查找 userId
 	toUser := auth.GetUserByUsername(toUsername)
 	if toUser == nil {
 		log.Printf("User not found: %s", toUsername)
-		return nil
+		return nil, nil
 	}
 
 	conversation, err := message.GetOrCreateConversation(fromUserID, toUser.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = message.SaveMessage(conversation.ID, fromUserID, content)
-	return err
+	return message.SaveMessage(conversation.ID, fromUserID, content)
 }

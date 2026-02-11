@@ -1,11 +1,14 @@
 package message
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/cyperlo/im/internal/models"
 	"github.com/cyperlo/im/pkg/database"
+	wsPkg "github.com/cyperlo/im/pkg/websocket"
 	"github.com/gin-gonic/gin"
 )
 
@@ -100,16 +103,16 @@ func GetHistory(c *gin.Context) {
 		}
 	}
 
-	// 批量获取消息
 	type MessageWithUsername struct {
 		models.Message
 		SenderUsername string `json:"sender_username"`
 	}
 
+	// 只获取每个会话最近10条消息
 	var allMessages []models.Message
 	database.DB.Where("conversation_id IN ?", conversationIDs).
 		Order("created_at DESC").
-		Limit(50 * len(conversationIDs)).
+		Limit(10 * len(conversationIDs)).
 		Find(&allMessages)
 
 	// 收集消息发送者ID
@@ -124,7 +127,7 @@ func GetHistory(c *gin.Context) {
 	}
 
 	var users []models.User
-	database.DB.Where("id IN ?", userIDs).Find(&users)
+	database.DB.Select("id, username, email").Where("id IN ?", userIDs).Find(&users)
 
 	// 构建用户映射
 	userMap := make(map[string]models.User)
@@ -169,9 +172,14 @@ func GetHistory(c *gin.Context) {
 				if uid != userID {
 					if user, ok := userMap[uid]; ok {
 						convResult.OtherUser = &user
+						break
 					}
-					break
 				}
+			}
+
+			// 如果没有找到other_user，跳过这个会话
+			if convResult.OtherUser == nil {
+				continue
 			}
 		}
 
@@ -179,4 +187,69 @@ func GetHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"conversations": result})
+}
+
+func RecallMessage(c *gin.Context) {
+	messageID := c.Param("id")
+	userID := c.GetString("user_id")
+
+	// 查询消息
+	var msg models.Message
+	if err := database.DB.Where("id = ?", messageID).First(&msg).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "消息不存在"})
+		return
+	}
+
+	// 验证是否是发送者
+	if msg.SenderID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权限撤回"})
+		return
+	}
+
+	// 更新消息内容为撤回提示
+	msg.Content = "[消息已撤回]"
+	msg.Status = "recalled"
+	if err := database.DB.Save(&msg).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "撤回失败"})
+		return
+	}
+
+	// 通过WebSocket广播撤回通知
+	broadcastRecallMessage(msg.ConversationID, messageID, userID)
+
+	c.JSON(http.StatusOK, gin.H{"message": "撤回成功"})
+}
+
+func broadcastRecallMessage(conversationID, messageID, senderID string) {
+	// 获取会话信息
+	var conversation models.Conversation
+	if err := database.DB.Where("id = ?", conversationID).First(&conversation).Error; err != nil {
+		return
+	}
+
+	wsMsg := map[string]interface{}{
+		"type":       "message_recalled",
+		"message_id": messageID,
+		"sender_id":  senderID,
+		"content":    "[消息已撤回]",
+		"timestamp":  time.Now().Unix(),
+	}
+
+	msgBytes, _ := json.Marshal(wsMsg)
+
+	if conversation.Type == "group" {
+		// 群组消息：广播给所有成员
+		var members []models.ConversationMember
+		database.DB.Where("conversation_id = ?", conversationID).Find(&members)
+		for _, member := range members {
+			wsPkg.SendToUser(member.UserID, msgBytes)
+		}
+	} else {
+		// 单聊消息：发送给会话双方
+		var members []models.ConversationMember
+		database.DB.Where("conversation_id = ?", conversationID).Find(&members)
+		for _, member := range members {
+			wsPkg.SendToUser(member.UserID, msgBytes)
+		}
+	}
 }

@@ -32,18 +32,30 @@ export default function ChatScreen({ route, navigation }: any) {
       setSending(true);
 
       try {
-        // 优先使用 WebSocket
+        const conversationId = conversations[username]?.userId;
+        
+        // 判断是否为群组（群组的userId就是conversationId）
+        const isGroup = conversationId && conversationId.length > 20; // UUID长度判断
+        
+        console.log('Sending message:', { username, conversationId, isGroup, wsConnected: wsService.isConnected() });
+        
         if (wsService.isConnected()) {
-          wsService.send({
-            type: 'chat',
+          const sent = wsService.send({
+            type: isGroup ? 'group_message' : 'chat',
             to: username,
             content,
           });
+          console.log('WebSocket send result:', sent);
         } else {
-          // WebSocket 未连接，使用 HTTP API
-          await messageAPI.send(username, content, token);
+          console.log('WebSocket not connected, using HTTP API');
+          if (isGroup) {
+            await messageAPI.sendGroupMessage(conversationId, content, token);
+          } else {
+            await messageAPI.send(username, content, token);
+          }
         }
       } catch (error) {
+        console.error('Send error:', error);
         Alert.alert('发送失败', '消息发送失败，请重试');
         setInput(content);
       } finally {

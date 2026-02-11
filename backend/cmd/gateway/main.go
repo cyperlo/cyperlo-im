@@ -51,13 +51,13 @@ func main() {
 				log.Printf("GetFriends called")
 				friend.GetFriends(c)
 			})
+			protected.GET("/friends/conversations", func(c *gin.Context) {
+				log.Printf("GetFriendConversations called")
+				friend.GetFriendConversations(c)
+			})
 			protected.GET("/users/search", func(c *gin.Context) {
 				log.Printf("SearchUser called with username: %s", c.Query("username"))
 				friend.SearchUser(c)
-			})
-			protected.GET("/conversations", func(c *gin.Context) {
-				log.Printf("GetHistory called")
-				message.GetHistory(c)
 			})
 			protected.POST("/groups", func(c *gin.Context) {
 				log.Printf("CreateGroup called")
@@ -70,6 +70,22 @@ func main() {
 			protected.POST("/groups/:id/messages", func(c *gin.Context) {
 				log.Printf("SendGroupMessage called")
 				group.SendGroupMessage(c)
+			})
+			protected.DELETE("/groups/:id/leave", func(c *gin.Context) {
+				log.Printf("LeaveGroup called")
+				group.LeaveGroup(c)
+			})
+			protected.PUT("/groups/:id/name", func(c *gin.Context) {
+				log.Printf("UpdateGroupName called")
+				group.UpdateGroupName(c)
+			})
+			protected.DELETE("/messages/:id", func(c *gin.Context) {
+				log.Printf("RecallMessage called")
+				message.RecallMessage(c)
+			})
+			protected.DELETE("/friends/:id", func(c *gin.Context) {
+				log.Printf("DeleteFriend called")
+				friend.DeleteFriend(c)
 			})
 		}
 	}

@@ -29,17 +29,26 @@ const messageSlice = createSlice({
   reducers: {
     addMessage: (state, action: PayloadAction<{ message: Message; currentUserId: string }>) => {
       const { message, currentUserId } = action.payload;
-      const { from, to, from_username, content, timestamp } = message;
+      const { from, to, from_username, content, timestamp, type } = message;
+      
+      console.log('addMessage called:', { message, currentUserId });
       
       // 确定对方的 username
       let otherUsername: string;
-      if (from === currentUserId) {
+      if (type === 'group_message') {
+        // 群组消息使用 group_name
         otherUsername = to!;
+        console.log('Group message, otherUsername:', otherUsername);
+      } else if (from === currentUserId) {
+        otherUsername = to!;
+        console.log('Sent message, otherUsername:', otherUsername);
       } else {
         otherUsername = from_username || from;
+        console.log('Received message, otherUsername:', otherUsername);
       }
       
       if (!state.conversations[otherUsername]) {
+        console.log('Creating new conversation for:', otherUsername);
         state.conversations[otherUsername] = {
           userId: from === currentUserId ? to! : from,
           username: otherUsername,
@@ -53,7 +62,29 @@ const messageSlice = createSlice({
       );
       
       if (!exists) {
+        console.log('Adding message to conversation:', otherUsername);
         state.conversations[otherUsername].messages.push(message);
+      } else {
+        console.log('Message already exists, skipping');
+      }
+    },
+    addConversation: (state, action: PayloadAction<any>) => {
+      const conv = action.payload;
+      const username = conv.other_user?.username || conv.name;
+      const userId = conv.other_user?.id || conv.id;
+      
+      if (!state.conversations[username]) {
+        state.conversations[username] = {
+          userId: userId,
+          username: username,
+          messages: conv.messages?.map((msg: any) => ({
+            type: msg.type || 'chat',
+            from: msg.sender_id || msg.from,
+            from_username: msg.sender_username || msg.from_username,
+            content: msg.content,
+            timestamp: msg.timestamp || new Date(msg.created_at).getTime() / 1000,
+          })) || [],
+        };
       }
     },
     loadConversations: (state, action: PayloadAction<any[]>) => {
@@ -78,5 +109,5 @@ const messageSlice = createSlice({
   },
 });
 
-export const { addMessage, loadConversations, clearMessages } = messageSlice.actions;
+export const { addMessage, addConversation, loadConversations, clearMessages } = messageSlice.actions;
 export default messageSlice.reducer;

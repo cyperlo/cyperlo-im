@@ -3,8 +3,8 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, A
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { logout } from '../store/slices/authSlice';
-import { loadConversations } from '../store/slices/messageSlice';
-import { friendAPI, conversationAPI } from '../services/api';
+import { loadConversations, addConversation } from '../store/slices/messageSlice';
+import { friendAPI, conversationAPI, groupAPI } from '../services/api';
 import wsService from '../services/websocket';
 
 export default function MainScreen({ navigation }: any) {
@@ -39,10 +39,18 @@ export default function MainScreen({ navigation }: any) {
 
   const loadHistory = async () => {
     try {
-      const data = await conversationAPI.getHistory(token!);
-      if (data.conversations) {
-        dispatch(loadConversations(data.conversations));
-      }
+      const [friendData, groupData] = await Promise.all([
+        conversationAPI.getFriendConversations(token!),
+        groupAPI.getGroups(token!)
+      ]);
+      const allConversations = [
+        ...(friendData.conversations || []),
+        ...(groupData.groups || [])
+      ];
+      // 使用 addConversation 逐个添加，避免刷新整个列表
+      allConversations.forEach(conv => {
+        dispatch(addConversation(conv));
+      });
     } catch (error) {
       console.error('Failed to load history:', error);
     }

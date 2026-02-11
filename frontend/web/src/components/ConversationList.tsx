@@ -3,15 +3,16 @@ import { List, Avatar, Button, Modal, Form, message, Empty, Input, Badge, Tabs }
 import { PlusOutlined, LogoutOutlined, SearchOutlined, UserOutlined, MessageOutlined, TeamOutlined } from '@ant-design/icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
-import { setActiveConversation } from '../store/slices/messageSlice';
+import { setActiveConversation, loadConversations } from '../store/slices/messageSlice';
 import { logout } from '../store/slices/authSlice';
-import { friendAPI, groupAPI } from '../services/api';
+import { friendAPI, groupAPI, conversationAPI } from '../services/api';
 import './ConversationList.css';
 
 const ConversationList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [friends, setFriends] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -22,6 +23,18 @@ const ConversationList: React.FC = () => {
   const { username } = useSelector((state: RootState) => state.auth);
 
   const conversationList = Object.values(conversations);
+  const groupList = conversationList.filter(c => {
+    console.log('Filtering conversation:', c.username, 'isGroup:', c.isGroup);
+    return c.isGroup;
+  });
+  const singleList = conversationList.filter(c => !c.isGroup);
+  
+  console.log('ConversationList render:', {
+    total: conversationList.length,
+    groups: groupList.length,
+    singles: singleList.length,
+    allConversations: conversationList
+  });
 
   useEffect(() => {
     loadFriends();
@@ -52,11 +65,24 @@ const ConversationList: React.FC = () => {
       return;
     }
     try {
-      await groupAPI.createGroup(values.groupName, selectedMembers);
+      const result = await groupAPI.createGroup(values.groupName, selectedMembers);
       message.success('创建群组成功');
       setIsGroupModalOpen(false);
       setSelectedMembers([]);
-      loadGroups();
+      
+      // 重新加载会话列表
+      const [friendData, groupData] = await Promise.all([
+        conversationAPI.getFriendConversations(),
+        groupAPI.getGroups()
+      ]);
+      const allConversations = [
+        ...(friendData.conversations || []),
+        ...(groupData.groups || [])
+      ];
+      dispatch(loadConversations(allConversations));
+      
+      // 自动打开新创建的群组
+      dispatch(setActiveConversation(values.groupName));
     } catch (error: any) {
       message.error(error.response?.data?.error || '创建失败');
     }
@@ -66,27 +92,38 @@ const ConversationList: React.FC = () => {
     setSearchLoading(true);
     try {
       const data = await friendAPI.searchUser(values.username);
-      setSearchResult(data);
+      if (data.users) {
+        setSearchResults(data.users);
+        setSearchResult(null);
+      } else {
+        setSearchResults([data]);
+        setSearchResult(data);
+      }
     } catch (error: any) {
       message.error(error.response?.data?.error || '用户不存在');
       setSearchResult(null);
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
   };
 
-  const handleAddFriend = async () => {
-    if (!searchResult) return;
+  const handleAddFriend = async (user: any) => {
+    if (!user || !user.id) {
+      message.error('用户信息无效');
+      return;
+    }
     try {
-      await friendAPI.addFriend(searchResult.id);
+      await friendAPI.addFriend(user.id);
       message.success('添加成功');
       setIsModalOpen(false);
       setSearchResult(null);
+      setSearchResults([]);
       loadFriends();
       // 自动开始会话并创建空会话
       const newConversation = {
-        userId: searchResult.id,
-        username: searchResult.username,
+        userId: user.id,
+        username: user.username,
         messages: [],
       };
       // 手动添加到 Redux store
@@ -103,6 +140,7 @@ const ConversationList: React.FC = () => {
   };
 
   const getAvatarColor = (name: string) => {
+    if (!name || name.length === 0) return '#0088cc';
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
@@ -234,16 +272,16 @@ const ConversationList: React.FC = () => {
                       >
                         <List.Item.Meta
                           avatar={
-                            <Badge dot status="success">
+                            <Badge dot={!item.isGroup} status="success">
                               <Avatar 
                                 size={48} 
                                 style={{ 
-                                  background: getAvatarColor(item.username),
+                                  background: item.isGroup ? '#52c41a' : getAvatarColor(item.username),
                                   fontSize: '18px',
                                   fontWeight: 600
                                 }}
                               >
-                                {item.username[0].toUpperCase()}
+                                {item.isGroup ? <TeamOutlined /> : (item.username?.[0]?.toUpperCase() || '?')}
                               </Avatar>
                             </Badge>
                           }
@@ -293,10 +331,115 @@ const ConversationList: React.FC = () => {
               ),
             },
             {
-              key: 'friends',
+              key: 'groups',
               label: (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <TeamOutlined />
+                  群组
+                </span>
+              ),
+              children: groupList.length === 0 ? (
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '300px',
+                  padding: '40px 20px'
+                }}>
+                  <Empty 
+                    description={
+                      <span style={{ color: '#8e8e93' }}>
+                        暂无群组<br/>
+                        <span style={{ fontSize: '12px' }}>点击上方按钮创建群组</span>
+                      </span>
+                    }
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                </div>
+              ) : (
+                <List
+                  dataSource={groupList}
+                  renderItem={(group) => {
+                    const lastMsg = group.messages[group.messages.length - 1];
+                    return (
+                      <List.Item
+                        onClick={() => {
+                          dispatch(setActiveConversation(group.username));
+                          setActiveTab('conversations');
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          padding: '16px',
+                          borderBottom: '1px solid #f5f5f5',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#fafafa';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <List.Item.Meta
+                          avatar={
+                            <Avatar 
+                              size={48} 
+                              style={{ 
+                                background: '#52c41a',
+                                fontSize: '18px',
+                                fontWeight: 600
+                              }}
+                            >
+                              <TeamOutlined />
+                            </Avatar>
+                          }
+                          title={
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span style={{ 
+                                fontWeight: 600,
+                                fontSize: '15px',
+                                color: '#000'
+                              }}>
+                                {group.username}
+                              </span>
+                              {lastMsg && (
+                                <span style={{ 
+                                  fontSize: '12px', 
+                                  color: '#8e8e93'
+                                }}>
+                                  {new Date(lastMsg.timestamp * 1000).toLocaleTimeString('zh-CN', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          }
+                          description={
+                            <div style={{ 
+                              color: '#8e8e93',
+                              fontSize: '13px'
+                            }}>
+                              {lastMsg?.content || '暂无消息'}
+                            </div>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              ),
+            },
+            {
+              key: 'friends',
+              label: (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <UserOutlined />
                   好友
                 </span>
               ),
@@ -352,7 +495,7 @@ const ConversationList: React.FC = () => {
                                 fontWeight: 600
                               }}
                             >
-                              {friend.username[0].toUpperCase()}
+                              {friend.username?.[0]?.toUpperCase() || '?'}
                             </Avatar>
                           </Badge>
                         }
@@ -457,6 +600,70 @@ const ConversationList: React.FC = () => {
           </Form.Item>
         </Form>
 
+        {searchResults.length > 0 && (
+          <List
+            dataSource={searchResults}
+            renderItem={(user: any) => (
+              <List.Item
+                style={{
+                  padding: '16px 24px',
+                  background: '#fff',
+                  borderRadius: '12px',
+                  marginBottom: '12px',
+                  border: '1px solid #e8e8e8',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f8f9fa';
+                  e.currentTarget.style.borderColor = '#0088cc';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fff';
+                  e.currentTarget.style.borderColor = '#e8e8e8';
+                }}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Avatar
+                      size={48}
+                      style={{
+                        background: getAvatarColor(user?.username || ''),
+                        fontSize: '18px',
+                        fontWeight: 600
+                      }}
+                    >
+                      {user?.username?.[0]?.toUpperCase() || '?'}
+                    </Avatar>
+                  }
+                  title={
+                    <div style={{ fontWeight: 600, fontSize: '16px', color: '#000' }}>
+                      {user?.username || '未知用户'}
+                    </div>
+                  }
+                  description={
+                    <div style={{ fontSize: '13px', color: '#8e8e93' }}>
+                      📧 {user.email}
+                    </div>
+                  }
+                />
+                <Button
+                  type="primary"
+                  onClick={() => handleAddFriend(user)}
+                  style={{
+                    background: '#0088cc',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 500
+                  }}
+                >
+                  添加
+                </Button>
+              </List.Item>
+            )}
+          />
+        )}
+
         {searchResult && (
           <div style={{ 
             padding: '24px',
@@ -469,13 +676,13 @@ const ConversationList: React.FC = () => {
               <Avatar 
                 size={64} 
                 style={{ 
-                  background: getAvatarColor(searchResult.username),
+                  background: getAvatarColor(searchResult?.username || ''),
                   fontSize: '24px',
                   fontWeight: 700,
                   boxShadow: '0 4px 12px rgba(0, 136, 204, 0.15)'
                 }}
               >
-                {searchResult.username[0].toUpperCase()}
+                {searchResult?.username?.[0]?.toUpperCase() || '?'}
               </Avatar>
               <div style={{ marginLeft: '16px', flex: 1 }}>
                 <div style={{ 
@@ -484,7 +691,7 @@ const ConversationList: React.FC = () => {
                   marginBottom: '4px',
                   color: '#000'
                 }}>
-                  {searchResult.username}
+                  {searchResult?.username || '未知用户'}
                 </div>
                 <div style={{ 
                   fontSize: '14px', 
@@ -500,7 +707,7 @@ const ConversationList: React.FC = () => {
             </div>
             <Button 
               type="primary" 
-              onClick={handleAddFriend} 
+              onClick={() => handleAddFriend(searchResult)} 
               block
               size="large"
               style={{
@@ -566,7 +773,7 @@ const ConversationList: React.FC = () => {
                   }}
                 >
                   <List.Item.Meta
-                    avatar={<Avatar style={{ background: getAvatarColor(friend.username) }}>{friend.username[0].toUpperCase()}</Avatar>}
+                    avatar={<Avatar style={{ background: getAvatarColor(friend.username || '') }}>{friend.username?.[0]?.toUpperCase() || '?'}</Avatar>}
                     title={friend.username}
                   />
                   {selectedMembers.includes(friend.id) && <span>✓</span>}

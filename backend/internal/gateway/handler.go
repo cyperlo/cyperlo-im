@@ -8,6 +8,7 @@ import (
 
 	"github.com/cyperlo/im/internal/auth"
 	"github.com/cyperlo/im/pkg/jwt"
+	wsPkg "github.com/cyperlo/im/pkg/websocket"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,7 +56,8 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 保存消息到数据库
-	if err := saveMessageToDB(userID.(string), req.To, req.Content); err != nil {
+	_, err := saveMessageToDB(userID.(string), req.To, req.Content)
+	if err != nil {
 		log.Printf("Failed to save message: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存消息失败"})
 		return
@@ -74,7 +76,14 @@ func SendMessage(c *gin.Context) {
 
 	// 通过 WebSocket 广播
 	data, _ := json.Marshal(msg)
-	hub.Broadcast <- data
+
+	// 发送给接收者
+	toUser := auth.GetUserByUsername(req.To)
+	if toUser != nil {
+		wsPkg.SendToUser(toUser.ID, data)
+	}
+	// 发送给发送者（回显）
+	wsPkg.SendToUser(userID.(string), data)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "sent",

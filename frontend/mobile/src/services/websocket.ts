@@ -1,5 +1,5 @@
 import { store } from '../store/store';
-import { addMessage } from '../store/slices/messageSlice';
+import { addMessage, addConversation } from '../store/slices/messageSlice';
 import { getWsUrl } from './api';
 
 class WebSocketService {
@@ -16,25 +16,70 @@ class WebSocketService {
     this.isManualClose = false;
     const WS_URL = getWsUrl();
     
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      return;
+    console.log('Connecting to WebSocket:', WS_URL);
+    
+    // 强制关闭旧连接
+    if (this.ws) {
+      console.log('Closing existing WebSocket connection');
+      this.ws.close();
+      this.ws = null;
     }
 
     this.ws = new WebSocket(`${WS_URL}?token=${token}`);
 
     this.ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected successfully');
       this.reconnectAttempts = 0;
     };
 
     this.ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      console.log('=== WebSocket onmessage START ===');
+      console.log('WebSocket received:', JSON.stringify(message, null, 2));
+      console.log('Message type:', message.type);
+      console.log('=== WebSocket onmessage END ===');
+      
       const state = store.getState();
       const currentUserId = state.auth.userId;
       
-      if (currentUserId) {
-        store.dispatch(addMessage({ message, currentUserId }));
+      if (!currentUserId) {
+        console.log('No currentUserId, ignoring message');
+        return;
       }
+
+      // 处理群组创建通知
+      if (message.type === 'group_created') {
+        console.log('Group created notification:', message);
+        store.dispatch(addConversation({
+          id: message.conversation_id,
+          name: message.group_name,
+          messages: [],
+        }));
+        return;
+      }
+
+      // 处理群组消息
+      if (message.type === 'group_message') {
+        console.log('Processing group message:', message);
+        const groupMessage = {
+          type: 'group_message',
+          from: message.from,
+          from_username: message.from_username,
+          to: message.group_name,
+          content: message.content,
+          timestamp: message.timestamp,
+        };
+        console.log('Dispatching group message:', groupMessage);
+        store.dispatch(addMessage({ 
+          message: groupMessage, 
+          currentUserId 
+        }));
+        return;
+      }
+
+      // 处理普通消息
+      console.log('Processing chat message:', message);
+      store.dispatch(addMessage({ message, currentUserId }));
     };
 
     this.ws.onerror = (error) => {
@@ -67,9 +112,11 @@ class WebSocketService {
 
   send(message: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('Sending WebSocket message:', message);
       this.ws.send(JSON.stringify(message));
       return true;
     }
+    console.log('WebSocket not connected');
     return false;
   }
 

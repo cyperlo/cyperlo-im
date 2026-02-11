@@ -69,8 +69,23 @@ export const friendAPI = {
 };
 
 export const conversationAPI = {
-  getHistory: async (token: string) => {
-    return request(GATEWAY_URL, '/conversations', {
+  getFriendConversations: async (token: string) => {
+    return request(GATEWAY_URL, '/friends/conversations', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+};
+
+export const groupAPI = {
+  createGroup: async (name: string, members: string[], token: string) => {
+    return request(GATEWAY_URL, '/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name, members }),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+  getGroups: async (token: string) => {
+    return request(GATEWAY_URL, '/groups', {
       headers: { Authorization: `Bearer ${token}` },
     });
   },
@@ -81,6 +96,13 @@ export const messageAPI = {
     return request(GATEWAY_URL, '/messages', {
       method: 'POST',
       body: JSON.stringify({ to, content, type: 'text' }),
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+  sendGroupMessage: async (groupId: string, content: string, token: string) => {
+    return request(GATEWAY_URL, `/groups/${groupId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
       headers: { Authorization: `Bearer ${token}` },
     });
   },
