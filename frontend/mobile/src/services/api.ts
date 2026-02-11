@@ -1,38 +1,14 @@
-import Constants from 'expo-constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_CONFIG } from '../config';
 
-const SERVER_CONFIG_KEY = '@server_config';
+const GATEWAY_URL = API_CONFIG.API_URL;
+const AUTH_URL = `${API_CONFIG.AUTH_BASE}/auth`;
 
-let API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://192.168.10.182:8080/api/v1';
-let AUTH_BASE = Constants.expoConfig?.extra?.authUrl || 'http://192.168.10.182:8081/api/v1';
-let WS_URL = 'ws://192.168.10.182:8080/ws';
-
-// 加载服务器配置
-export const loadServerConfig = async () => {
-  try {
-    const config = await AsyncStorage.getItem(SERVER_CONFIG_KEY);
-    if (config) {
-      const parsed = JSON.parse(config);
-      API_URL = parsed.apiUrl || API_URL;
-      AUTH_BASE = parsed.authUrl || AUTH_BASE;
-      WS_URL = parsed.wsUrl || WS_URL;
-    }
-  } catch (error) {
-    console.error('加载服务器配置失败:', error);
-  }
-};
-
-export const getWsUrl = () => WS_URL;
-
-const GATEWAY_URL = API_URL;
-const AUTH_URL = `${AUTH_BASE}/auth`;
+export const getWsUrl = () => API_CONFIG.WS_URL;
 
 const request = async (baseUrl: string, url: string, options: any = {}) => {
   try {
-    await loadServerConfig();
-    const finalBaseUrl = baseUrl.includes('auth') ? `${AUTH_BASE}/auth` : API_URL;
-    console.log('Request:', `${finalBaseUrl}${url}`, options);
-    const response = await fetch(`${finalBaseUrl}${url}`, {
+    console.log('Request:', `${baseUrl}${url}`, options);
+    const response = await fetch(`${baseUrl}${url}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -102,8 +78,7 @@ export const conversationAPI = {
 
 export const messageAPI = {
   send: async (to: string, content: string, token: string) => {
-    await loadServerConfig();
-    return request(API_URL, '/messages', {
+    return request(GATEWAY_URL, '/messages', {
       method: 'POST',
       body: JSON.stringify({ to, content, type: 'text' }),
       headers: { Authorization: `Bearer ${token}` },

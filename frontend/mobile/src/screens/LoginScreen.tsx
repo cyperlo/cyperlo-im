@@ -13,17 +13,22 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleSubmit = async () => {
     try {
+      console.log('开始请求:', isLogin ? '登录' : '注册');
       if (isLogin) {
         const data = await authAPI.login(username, password);
+        console.log('登录成功:', data);
         dispatch(login({ token: data.token, userId: data.user_id, username: data.username }));
         navigation.replace('Main');
       } else {
-        await authAPI.register(username, email, password);
+        const data = await authAPI.register(username, email, password);
+        console.log('注册成功:', data);
         Alert.alert('成功', '注册成功，请登录');
         setIsLogin(true);
       }
     } catch (error: any) {
-      Alert.alert('错误', error.response?.data?.error || '操作失败');
+      console.error('请求失败:', error);
+      const errorMsg = error.response?.data?.error || error.message || '网络连接失败，请检查服务器地址';
+      Alert.alert('错误', errorMsg);
     }
   };
 

@@ -1,9 +1,6 @@
 import { store } from '../store/store';
 import { addMessage } from '../store/slices/messageSlice';
-import Constants from 'expo-constants';
 import { getWsUrl } from './api';
-
-let WS_URL = Constants.expoConfig?.extra?.wsUrl || 'ws://192.168.10.182:8080/ws';
 
 class WebSocketService {
   private ws: WebSocket | null = null;
@@ -17,7 +14,7 @@ class WebSocketService {
   connect(token: string) {
     this.token = token;
     this.isManualClose = false;
-    WS_URL = getWsUrl();
+    const WS_URL = getWsUrl();
     
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
