@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: im-redis
+    command: redis-server ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    ports:
+      - "6379:6379"
+    networks:
+      - im-network
+
+  auth:
+    image: im-auth:latest
+    container_name: im-auth
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-im_system}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - im-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  gateway:
+    image: im-gateway:latest
+    container_name: im-gateway
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-im_system}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth:8081}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - auth
+    networks:
+      - im-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  message:
+    image: im-message:latest
+    container_name: im-message
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-im_system}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    ports:
+      - "8082:8082"
+    depends_on:
+      - redis
+    networks:
+      - im-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    image: im-web:latest
+    container_name: im-web
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway
+    networks:
+      - im-network
+
+networks:
+  im-network:
+    driver: bridge

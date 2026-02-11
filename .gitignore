@@ -1,29 +1,15 @@
-# Go
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-go.work
-vendor/
+# Environment
+.env
 
-# React
-node_modules/
-build/
-dist/
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Build
+backend/bin/
+frontend/web/build/
+frontend/web/node_modules/
+frontend/mobile/node_modules/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
 # OS
 .DS_Store
@@ -31,7 +17,3 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
-
-# Config
-config/local.yaml
