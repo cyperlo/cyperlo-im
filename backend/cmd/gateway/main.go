@@ -5,6 +5,7 @@ import (
 
 	"github.com/cyperlo/im/internal/friend"
 	"github.com/cyperlo/im/internal/gateway"
+	"github.com/cyperlo/im/internal/group"
 	"github.com/cyperlo/im/internal/message"
 	"github.com/cyperlo/im/pkg/bootstrap"
 	"github.com/gin-gonic/gin"
@@ -57,6 +58,18 @@ func main() {
 			protected.GET("/conversations", func(c *gin.Context) {
 				log.Printf("GetHistory called")
 				message.GetHistory(c)
+			})
+			protected.POST("/groups", func(c *gin.Context) {
+				log.Printf("CreateGroup called")
+				group.CreateGroup(c)
+			})
+			protected.GET("/groups", func(c *gin.Context) {
+				log.Printf("GetGroups called")
+				group.GetGroups(c)
+			})
+			protected.POST("/groups/:id/messages", func(c *gin.Context) {
+				log.Printf("SendGroupMessage called")
+				group.SendGroupMessage(c)
 			})
 		}
 	}

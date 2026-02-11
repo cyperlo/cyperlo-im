@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.10.182:8081/api/v1';
-const GATEWAY_URL = 'http://192.168.10.182:8080/api/v1';
+const API_BASE_URL = 'http://localhost:8081/api/v1';
+const GATEWAY_URL = 'http://localhost:8080/api/v1';
 
 // 添加请求拦截器
 axios.interceptors.request.use(
@@ -90,11 +90,36 @@ export const conversationAPI = {
   },
 };
 
+export const groupAPI = {
+  createGroup: async (name: string, members: string[]) => {
+    const response = await axios.post(
+      `${GATEWAY_URL}/groups`,
+      { name, members },
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  },
+  getGroups: async () => {
+    const response = await axios.get(`${GATEWAY_URL}/groups`, {
+      headers: getAuthHeader(),
+    });
+    return response.data;
+  },
+};
+
 export const messageAPI = {
   send: async (to: string, content: string) => {
     const response = await axios.post(
       `${GATEWAY_URL}/messages`,
       { to, content, type: 'text' },
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  },
+  sendToGroup: async (conversationId: string, content: string) => {
+    const response = await axios.post(
+      `${GATEWAY_URL}/groups/${conversationId}/messages`,
+      { content },
       { headers: getAuthHeader() }
     );
     return response.data;

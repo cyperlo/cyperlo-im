@@ -59,7 +59,6 @@ func GetConversation(c *gin.Context) {
 func GetHistory(c *gin.Context) {
 	userID := c.GetString("user_id")
 
-	// 获取用户的所有会话
 	var members []models.ConversationMember
 	if err := database.DB.Where("user_id = ?", userID).Find(&members).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取会话失败"})
@@ -76,66 +75,107 @@ func GetHistory(c *gin.Context) {
 		return
 	}
 
-	// 获取每个会话的最新消息
+	// 批量获取会话
+	var conversations []models.Conversation
+	if err := database.DB.Where("id IN ?", conversationIDs).Find(&conversations).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取会话失败"})
+		return
+	}
+
+	// 批量获取所有会话成员
+	var allMembers []models.ConversationMember
+	database.DB.Where("conversation_id IN ?", conversationIDs).Find(&allMembers)
+
+	// 构建会话成员映射
+	memberMap := make(map[string][]string)
+	for _, m := range allMembers {
+		memberMap[m.ConversationID] = append(memberMap[m.ConversationID], m.UserID)
+	}
+
+	// 收集所有需要查询的用户ID
+	userIDSet := make(map[string]bool)
+	for _, members := range memberMap {
+		for _, uid := range members {
+			userIDSet[uid] = true
+		}
+	}
+
+	// 批量获取消息
 	type MessageWithUsername struct {
 		models.Message
 		SenderUsername string `json:"sender_username"`
 	}
 
-	type ConversationWithMessages struct {
-		ConversationID string                `json:"conversation_id"`
-		OtherUser      models.User           `json:"other_user"`
-		Messages       []MessageWithUsername `json:"messages"`
+	var allMessages []models.Message
+	database.DB.Where("conversation_id IN ?", conversationIDs).
+		Order("created_at DESC").
+		Limit(50 * len(conversationIDs)).
+		Find(&allMessages)
+
+	// 收集消息发送者ID
+	for _, msg := range allMessages {
+		userIDSet[msg.SenderID] = true
 	}
 
-	var result []ConversationWithMessages
+	// 批量获取所有用户信息
+	var userIDs []string
+	for uid := range userIDSet {
+		userIDs = append(userIDs, uid)
+	}
 
-	for _, convID := range conversationIDs {
-		// 获取会话成员
-		var convMembers []models.ConversationMember
-		database.DB.Where("conversation_id = ?", convID).Find(&convMembers)
+	var users []models.User
+	database.DB.Where("id IN ?", userIDs).Find(&users)
 
-		// 找到对方用户
-		var otherUserID string
-		for _, m := range convMembers {
-			if m.UserID != userID {
-				otherUserID = m.UserID
-				break
-			}
+	// 构建用户映射
+	userMap := make(map[string]models.User)
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+
+	// 构建消息映射
+	messageMap := make(map[string][]MessageWithUsername)
+	for _, msg := range allMessages {
+		username := ""
+		if user, ok := userMap[msg.SenderID]; ok {
+			username = user.Username
 		}
-
-		if otherUserID == "" {
-			continue
-		}
-
-		// 获取对方用户信息
-		var otherUser models.User
-		if err := database.DB.Where("id = ?", otherUserID).First(&otherUser).Error; err != nil {
-			continue
-		}
-
-		// 获取最近的消息
-		messages, _ := GetConversationMessages(convID, 50)
-
-		// 为每条消息添加发送者用户名
-		var messagesWithUsername []MessageWithUsername
-		for _, msg := range messages {
-			var sender models.User
-			senderUsername := ""
-			if err := database.DB.Where("id = ?", msg.SenderID).First(&sender).Error; err == nil {
-				senderUsername = sender.Username
-			}
-			messagesWithUsername = append(messagesWithUsername, MessageWithUsername{
-				Message:        msg,
-				SenderUsername: senderUsername,
-			})
-		}
-
-		result = append(result, ConversationWithMessages{
-			ConversationID: convID,
-			OtherUser:      otherUser,
-			Messages:       messagesWithUsername,
+		messageMap[msg.ConversationID] = append(messageMap[msg.ConversationID], MessageWithUsername{
+			Message:        msg,
+			SenderUsername: username,
 		})
+	}
+
+	type ConversationResult struct {
+		ID        string                `json:"id"`
+		Type      string                `json:"type"`
+		Name      string                `json:"name,omitempty"`
+		OtherUser *models.User          `json:"other_user,omitempty"`
+		Messages  []MessageWithUsername `json:"messages"`
+	}
+
+	var result []ConversationResult
+
+	for _, conv := range conversations {
+		convResult := ConversationResult{
+			ID:       conv.ID,
+			Type:     conv.Type,
+			Name:     conv.Name,
+			Messages: messageMap[conv.ID],
+		}
+
+		if conv.Type == "single" {
+			members := memberMap[conv.ID]
+			for _, uid := range members {
+				if uid != userID {
+					if user, ok := userMap[uid]; ok {
+						convResult.OtherUser = &user
+					}
+					break
+				}
+			}
+		}
+
+		result = append(result, convResult)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"conversations": result})

@@ -10,8 +10,10 @@ interface Message {
 }
 
 interface Conversation {
-  userId: string;
+  userId?: string;
   username: string;
+  conversationId?: string;
+  isGroup?: boolean;
   messages: Message[];
 }
 
@@ -78,27 +80,44 @@ const messageSlice = createSlice({
     },
     loadConversations: (state, action: PayloadAction<any[]>) => {
       const currentUserId = localStorage.getItem('userId');
+      console.log('Loading conversations:', action.payload);
+      
       action.payload.forEach((conv) => {
-        const username = conv.other_user.username;
+        let username: string;
+        let isGroup = false;
+        let conversationId = conv.id;
+
+        if (conv.type === 'group') {
+          username = conv.name;
+          isGroup = true;
+        } else {
+          if (!conv.other_user) {
+            console.warn('Missing other_user for conversation:', conv);
+            return;
+          }
+          username = conv.other_user.username;
+        }
+
         const existingMessages = state.conversations[username]?.messages || [];
-        const newMessages = conv.messages.map((msg: any) => ({
+        const newMessages = (conv.messages || []).map((msg: any) => ({
           type: 'chat',
           from: msg.sender_id,
           from_username: msg.sender_username,
-          to: msg.sender_id === currentUserId ? username : currentUserId,
+          to: isGroup ? conversationId : (msg.sender_id === currentUserId ? username : currentUserId),
           content: msg.content,
           timestamp: new Date(msg.created_at).getTime() / 1000,
         }));
         
-        // 合并消息，去重
         const allMessages = [...existingMessages, ...newMessages];
         const uniqueMessages = allMessages.filter((msg, index, self) => 
           index === self.findIndex((m) => m.timestamp === msg.timestamp && m.content === msg.content)
         );
         
         state.conversations[username] = {
-          userId: conv.other_user.id,
+          userId: isGroup ? undefined : conv.other_user?.id,
           username: username,
+          conversationId: conversationId,
+          isGroup: isGroup,
           messages: uniqueMessages.sort((a, b) => a.timestamp - b.timestamp),
         };
       });

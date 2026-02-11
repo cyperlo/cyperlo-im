@@ -33,11 +33,15 @@ const ChatWindow: React.FC = () => {
   const handleSend = async () => {
     if (input.trim() && activeConversation && !sending) {
       const content = input.trim();
+      const currentConv = conversations[activeConversation];
       setInput('');
       setSending(true);
 
       try {
-        if (wsService.isConnected()) {
+        if (currentConv?.isGroup) {
+          // 群聊消息通过HTTP发送
+          await messageAPI.sendToGroup(currentConv.conversationId!, content);
+        } else if (wsService.isConnected()) {
           wsService.send({
             type: 'chat',
             to: activeConversation,

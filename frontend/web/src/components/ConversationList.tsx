@@ -5,15 +5,18 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';
 import { setActiveConversation } from '../store/slices/messageSlice';
 import { logout } from '../store/slices/authSlice';
-import { friendAPI } from '../services/api';
+import { friendAPI, groupAPI } from '../services/api';
 import './ConversationList.css';
 
 const ConversationList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [searchResult, setSearchResult] = useState<any>(null);
   const [friends, setFriends] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('conversations');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const dispatch = useDispatch();
   const { conversations, activeConversation } = useSelector((state: RootState) => state.message);
   const { username } = useSelector((state: RootState) => state.auth);
@@ -22,6 +25,7 @@ const ConversationList: React.FC = () => {
 
   useEffect(() => {
     loadFriends();
+    loadGroups();
   }, []);
 
   const loadFriends = async () => {
@@ -30,6 +34,31 @@ const ConversationList: React.FC = () => {
       setFriends(data.friends || []);
     } catch (error) {
       console.error('Failed to load friends:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const data = await groupAPI.getGroups();
+      setGroups(data.groups || []);
+    } catch (error) {
+      console.error('Failed to load groups:', error);
+    }
+  };
+
+  const handleCreateGroup = async (values: any) => {
+    if (selectedMembers.length === 0) {
+      message.error('请至少选择一个成员');
+      return;
+    }
+    try {
+      await groupAPI.createGroup(values.groupName, selectedMembers);
+      message.success('创建群组成功');
+      setIsGroupModalOpen(false);
+      setSelectedMembers([]);
+      loadGroups();
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '创建失败');
     }
   };
 
@@ -116,10 +145,27 @@ const ConversationList: React.FC = () => {
             borderRadius: '10px',
             height: '44px',
             fontWeight: 500,
-            boxShadow: '0 2px 8px rgba(0, 136, 204, 0.2)'
+            boxShadow: '0 2px 8px rgba(0, 136, 204, 0.2)',
+            marginBottom: '8px'
           }}
         >
           添加好友
+        </Button>
+        <Button 
+          icon={<TeamOutlined />} 
+          onClick={() => setIsGroupModalOpen(true)} 
+          block
+          size="large"
+          style={{ 
+            background: '#fff',
+            border: '1px solid #0088cc',
+            color: '#0088cc',
+            borderRadius: '10px',
+            height: '44px',
+            fontWeight: 500
+          }}
+        >
+          创建群组
         </Button>
       </div>
 
@@ -482,6 +528,56 @@ const ConversationList: React.FC = () => {
             <p style={{ margin: 0, fontSize: '14px' }}>搜索用户开始添加好友</p>
           </div>
         )}
+      </Modal>
+
+      {/* Create Group Modal */}
+      <Modal
+        title="创建群组"
+        open={isGroupModalOpen}
+        onCancel={() => {
+          setIsGroupModalOpen(false);
+          setSelectedMembers([]);
+        }}
+        footer={null}
+        width={500}
+      >
+        <Form onFinish={handleCreateGroup}>
+          <Form.Item name="groupName" rules={[{ required: true, message: '请输入群组名称' }]}>
+            <Input placeholder="群组名称" size="large" />
+          </Form.Item>
+          <Form.Item label="选择成员">
+            <List
+              dataSource={friends}
+              renderItem={(friend) => (
+                <List.Item
+                  onClick={() => {
+                    setSelectedMembers(prev =>
+                      prev.includes(friend.id)
+                        ? prev.filter(id => id !== friend.id)
+                        : [...prev, friend.id]
+                    );
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    background: selectedMembers.includes(friend.id) ? '#e6f7ff' : 'transparent',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '8px'
+                  }}
+                >
+                  <List.Item.Meta
+                    avatar={<Avatar style={{ background: getAvatarColor(friend.username) }}>{friend.username[0].toUpperCase()}</Avatar>}
+                    title={friend.username}
+                  />
+                  {selectedMembers.includes(friend.id) && <span>✓</span>}
+                </List.Item>
+              )}
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block size="large">
+            创建
+          </Button>
+        </Form>
       </Modal>
     </div>
   );
