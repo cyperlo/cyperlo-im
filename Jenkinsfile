@@ -3,11 +3,6 @@ pipeline {
     
     environment {
         IMAGE_TAG = "${BUILD_NUMBER}"
-        DB_HOST = credentials('DB_HOST')
-        DB_USER = credentials('DB_USER')
-        DB_PASSWORD = credentials('DB_PASSWORD')
-        DB_NAME = credentials('DB_NAME')
-        JWT_SECRET = credentials('JWT_SECRET')
     }
     
     stages {
@@ -44,11 +39,19 @@ pipeline {
         
         stage('Deploy') {
             steps {
-                sh '''
-                    cp .env.example .env
-                    docker-compose up -d
-                    docker image prune -af --filter "until=24h"
-                '''
+                withCredentials([
+                    string(credentialsId: 'DB_HOST', variable: 'DB_HOST'),
+                    string(credentialsId: 'DB_USER', variable: 'DB_USER'),
+                    string(credentialsId: 'DB_PASSWORD', variable: 'DB_PASSWORD'),
+                    string(credentialsId: 'DB_NAME', variable: 'DB_NAME'),
+                    string(credentialsId: 'JWT_SECRET', variable: 'JWT_SECRET')
+                ]) {
+                    sh '''
+                        cp .env.example .env
+                        docker-compose up -d
+                        docker image prune -af --filter "until=24h"
+                    '''
+                }
             }
         }
     }
@@ -59,9 +62,6 @@ pipeline {
         }
         failure {
             echo 'Deployment failed!'
-        }
-        always {
-            cleanWs()
         }
     }
 }
