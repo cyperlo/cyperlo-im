@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from 'antd';
 import { RootState } from './store/store';
 import ConversationList from './components/ConversationList';
@@ -13,8 +14,19 @@ import './App.css';
 const { Sider, Content } = Layout;
 
 const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<MainApp />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
+
+const MainApp: React.FC = () => {
   const { isAuthenticated, token } = useSelector((state: RootState) => state.auth);
-  const { activeConversation, loaded } = useSelector((state: RootState) => state.message);
+  const { activeConversation } = useSelector((state: RootState) => state.message);
   const dispatch = useDispatch();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
@@ -30,7 +42,6 @@ const App: React.FC = () => {
     if (isAuthenticated && token) {
       wsService.connect(token);
       
-      // 加载好友会话和群组
       Promise.all([
         conversationAPI.getFriendConversations(),
         groupAPI.getGroups()
@@ -50,7 +61,7 @@ const App: React.FC = () => {
   }, [isAuthenticated, token, dispatch]);
 
   if (!isAuthenticated) {
-    return <Login />;
+    return <Navigate to="/login" />;
   }
 
   if (isMobile) {

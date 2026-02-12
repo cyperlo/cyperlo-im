@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, Tabs, message, Checkbox } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Form, Input, Button, Card, Tabs, message, Checkbox, Modal, Space } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, SettingOutlined } from '@ant-design/icons';
 import { useDispatch } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { setCredentials } from '../store/slices/authSlice';
 import { authAPI } from '../services/api';
 import './Login.css';
@@ -9,7 +10,43 @@ import './Login.css';
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = () => {
+    try {
+      const config = localStorage.getItem('server_config');
+      if (config) {
+        form.setFieldsValue(JSON.parse(config));
+      }
+    } catch (error) {
+      console.error('加载配置失败:', error);
+    }
+  };
+
+  const saveConfig = (values: any) => {
+    try {
+      localStorage.setItem('server_config', JSON.stringify(values));
+      message.success('服务器配置已保存，请刷新页面生效');
+      setSettingsVisible(false);
+    } catch (error) {
+      message.error('保存配置失败');
+    }
+  };
+
+  const resetConfig = () => {
+    form.setFieldsValue({
+      apiUrl: 'http://localhost:8090/api/v1',
+      authUrl: 'http://localhost:8091/api/v1',
+      wsUrl: 'ws://localhost:8090/ws'
+    });
+  };
 
   const onLogin = async (values: any) => {
     setLoading(true);
@@ -112,7 +149,88 @@ const Login: React.FC = () => {
             },
           ]}
         />
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Button 
+            type="link" 
+            icon={<SettingOutlined />}
+            onClick={() => setSettingsVisible(true)}
+          >
+            服务器设置
+          </Button>
+        </div>
       </Card>
+
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SettingOutlined style={{ fontSize: 20 }} />
+            <span>服务器设置</span>
+          </div>
+        }
+        open={settingsVisible}
+        onCancel={() => setSettingsVisible(false)}
+        footer={null}
+        width={520}
+        centered
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={saveConfig}
+          initialValues={{
+            apiUrl: 'http://localhost:8090/api/v1',
+            authUrl: 'http://localhost:8091/api/v1',
+            wsUrl: 'ws://localhost:8090/ws'
+          }}
+        >
+          <Form.Item
+            label="API 服务器地址"
+            name="apiUrl"
+            rules={[{ required: true, message: '请输入 API 服务器地址' }]}
+            tooltip="用于处理业务请求的服务器地址"
+          >
+            <Input 
+              placeholder="http://localhost:8090/api/v1" 
+              prefix={<span style={{ color: '#999' }}>🌐</span>}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="认证服务器地址"
+            name="authUrl"
+            rules={[{ required: true, message: '请输入认证服务器地址' }]}
+            tooltip="用于用户登录认证的服务器地址"
+          >
+            <Input 
+              placeholder="http://localhost:8091/api/v1" 
+              prefix={<span style={{ color: '#999' }}>🔐</span>}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="WebSocket 地址"
+            name="wsUrl"
+            rules={[{ required: true, message: '请输入 WebSocket 地址' }]}
+            tooltip="用于实时消息推送的 WebSocket 地址"
+          >
+            <Input 
+              placeholder="ws://localhost:8090/ws" 
+              prefix={<span style={{ color: '#999' }}>⚡</span>}
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={resetConfig}>
+                恢复默认
+              </Button>
+              <Button type="primary" htmlType="submit">
+                保存配置
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };
